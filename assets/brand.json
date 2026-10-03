@@ -1,0 +1,34 @@
+{
+  "_comment": "Channel brand. Override per video project with <videos_dir>/assets/brand.json (only the keys you change). Sizes are fractions of the canvas short side, so they scale for 16:9 and 9:16. Font files resolve next to the override file, in its fonts/ folder, then in video-use/assets/fonts/.",
+  "fonts": {
+    "display": "Poppins-Black.ttf",
+    "body": "Poppins-ExtraBold.ttf",
+    "heavy": "SpaceGrotesk-Bold.ttf",
+    "light": "SpaceGrotesk-Medium.ttf",
+    "hand": "SpaceGrotesk-Bold.ttf"
+  },
+  "colors": {
+    "white": "#FFFFFF",
+    "ink": "#0B0B0F",
+    "accent_1": "#2E7BFF",
+    "accent_2": "#2E7BFF",
+    "accent_3": "#8CB6FF",
+    "warn": "#FF3B3B",
+    "panel": "#3A3B40"
+  },
+  "panel_alpha": 0.62,
+  "stroke": 0.006,
+  "shadow": [0.004, 0.005],
+  "tilt": 3,
+  "captions": {
+    "font": "body",
+    "size": 0.07,
+    "case": "upper",
+    "max_words": 2,
+    "color": "white",
+    "active_color": "accent_1",
+    "box": true,
+    "margin_v_portrait": 0.30,
+    "margin_v_landscape": 0.10
+  }
+}

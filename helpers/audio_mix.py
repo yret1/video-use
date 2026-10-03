@@ -31,16 +31,19 @@ FMT = f"aresample={SAMPLE_RATE},aformat=sample_rates={SAMPLE_RATE}:channel_layou
 PATCH_FADE = 0.06  # crossfade length at J/L patch edges
 DUCK = "sidechaincompress=threshold=0.02:ratio=8:attack=15:release=350"
 AUDIO_EXTS = (".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".aif", ".aiff")
+REPO_ASSETS = Path(__file__).resolve().parent.parent / "assets"
+FREETOUSE = "https://freetouse.com/music"
 
 
 def resolve_asset(name: str, edit_dir: Path, kind: str) -> Path:
     """Resolve a path (absolute / relative to edit dir or videos dir) or a bare
-    asset name looked up in <videos_dir>/assets/<kind>/."""
+    asset name looked up in <videos_dir>/assets/<kind>/, then the video-use kit
+    (video-use/assets/<kind>/, e.g. the synthesized SFX starter kit)."""
     p = Path(name)
     candidates = [p] if p.is_absolute() else [edit_dir / p, edit_dir.parent / p]
     if not p.suffix:
-        lib = edit_dir.parent / "assets" / kind
-        candidates += [lib / f"{name}{ext}" for ext in AUDIO_EXTS]
+        for lib in (edit_dir.parent / "assets" / kind, REPO_ASSETS / kind):
+            candidates += [lib / f"{name}{ext}" for ext in AUDIO_EXTS]
     for c in candidates:
         if c.exists():
             return c.resolve()
@@ -75,6 +78,44 @@ def _patch_gain_expr(patches: list[dict]) -> str:
         a, b = float(p["at"]), float(p["at"]) + float(p["len"])
         terms.append(f"(1-clip(min((t-{a - f:.4f})/{f},({b + f:.4f}-t)/{f}),0,1))")
     return "*".join(terms)
+
+
+def write_music_credits(music: list[dict], edit_dir: Path) -> Path | None:
+    """Write the description credit block for every music track used.
+
+    Free To Use (source "freetouse") requires this in the video description
+    BEFORE the video goes public, or the upload gets a Content ID claim.
+    Other sources: put the exact required text in the entry's `credit`.
+    """
+    if not music:
+        return None
+    seen, ftu, other, missing = set(), [], [], []
+    for m in music:
+        key = (m.get("title"), m.get("artist"), m["file"])
+        if key in seen:
+            continue
+        seen.add(key)
+        if m.get("source") == "freetouse":
+            if m.get("title") and m.get("artist"):
+                ftu.append(f"{m['title']} by {m['artist']}")
+            else:
+                missing.append(m["file"])
+        elif m.get("credit"):
+            other.append(m["credit"])
+        else:
+            missing.append(m["file"])
+    lines = []
+    if ftu:
+        lines += ["Music from Free To Use", f"Source: {FREETOUSE}", *ftu]
+    if other:
+        lines += ([""] if lines else []) + other
+    out = edit_dir / "description_credits.txt"
+    out.write_text("\n".join(lines) + "\n")
+    print(f"music credits → {out.name}  (paste into the description BEFORE publishing)")
+    for f in missing:
+        print(f"  WARNING: no attribution for music {f!r}: add source/title/artist "
+              f"(Free To Use) or `credit` to its EDL entry")
+    return out
 
 
 def mix_audio(
@@ -213,6 +254,7 @@ def main() -> None:
     edl = json.loads(edl_path.read_text())
     mix_audio(args.base.resolve(), args.output.resolve(), edl.get("music") or [],
               edl.get("sfx") or [], [], edl_path.parent)
+    write_music_credits(edl.get("music") or [], edl_path.parent)
 
 
 if __name__ == "__main__":

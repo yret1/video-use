@@ -82,6 +82,8 @@ Write the review as a short list in `edit/review.md` along with what you changed
 - `helpers/transitions.py`: range `transition_in` (whip, crossfade, dip_black, flash, zoom, wipe, circle, raw xfade, j_cut, l_cut).
 - `helpers/audio_mix.py`: top-level `music` and `sfx`, plus ducking and the J/L audio patches.
 - `helpers/beats.py <track>`: beat/downbeat/onset grid as JSON.
+- `helpers/graphics.py`: brand graphics (title, counter, stamp, popup, arrow, circle, progress, reveal, sticker) as alpha WebM overlays, plus SFX cue files. See `fitness-motion-style`.
+- `"caption_style": "brand"` + `--build-subtitles`: brand captions (ASS via libass).
 - Overlays accept `rect: [x,y,w,h]`, `tilt` (degrees), `anim: "pop"`, PNG/JPG/WebP stills and alpha WebM.
 - Sources with another aspect ratio, rotation or no audio are fitted onto the first range's canvas automatically.
 

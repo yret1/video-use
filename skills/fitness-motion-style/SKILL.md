@@ -1,80 +1,70 @@
 ---
 name: fitness-motion-style
-description: Design system and build briefs for on-screen graphics in fitness/vlog YouTube, covering macro and calorie counters, rep/weight trackers, day and time stamps, chapter title slams, hand-drawn callouts, text pop-ups, cut-out stickers and result reveals, styled as bold creator-energy graphics rather than clean tech/terminal UI. Use during the graphics pass of a fitness edit or whenever building any overlay animation for one.
+description: The channel's on-screen graphics system for fitness/vlog YouTube: macro/calorie counters, chapter title slams, day stamps, marker arrows and circles, text pop-ups, stickers, progress bars, result reveals and brand captions, rendered by helpers/graphics.py in the channel brand (blue, black, translucent gray panels, Poppins + Space Grotesk). Use during the graphics pass of a fitness edit or whenever building any overlay or caption for one.
 ---
 
 # Fitness Motion Style
 
-The look is **loud, tactile and handmade**: thick type, stickers, marker scribbles, paper and tape, things that slam in and wobble. It should feel like a creator cut it together with personality. It should *not* feel like a SaaS dashboard, a terminal, or a corporate lower-third.
+**The brand:** blue, black and translucent gray. Bold Poppins type with an ink stroke sits straight on the footage. Information lives on **translucent gray panels with a blue accent edge**, and the key word or number is in blue. The motion keeps the creator energy (slams, overshoot pops, tilt, marker strokes that draw on), while the palette keeps it clean and on-brand. Don't use other colours, fonts or monospace, and don't build one-off designs outside this system.
 
-This **replaces** video-use's example palette (near-black + orange Menlo). Don't use monospace fonts, thin lines, dark glassmorphism, gradients-on-black, or anything that reads "dev tool".
+## Brand tokens (`video-use/assets/brand.json`)
 
-## Design tokens (default — swap for the user's brand)
+| Token | Value | Used for |
+|---|---|---|
+| `display` | Poppins Black | titles, big numbers, stamps |
+| `body` | Poppins ExtraBold | pop-ups, captions |
+| `heavy` / `light` | Space Grotesk Bold / Medium | panel labels, sub-lines, marker notes |
+| `accent_1` / `accent_2` | `#2E7BFF` blue | key words, numbers, arrows, circles, panel edge |
+| `accent_3` | `#8CB6FF` light blue | panel labels |
+| `ink` | `#0B0B0F` | strokes, shadows |
+| `panel` | `#3A3B40` at 62% | every background panel and the caption box |
+| `warn` | `#FF3B3B` | only for "over target" on counters |
 
-Confirm or replace these at intake. Store the confirmed version (as plain JSON, comments stripped) in `<videos_dir>/assets/brand.json` and reuse it on every video.
+To change the brand for one project, add `<videos_dir>/assets/brand.json` containing only the keys you change; `graphics.py` and the captions pick it up automatically. To change it for the whole channel, edit the repo file. The brand fonts have **no emoji**, so emoji are stripped with a note.
 
-```jsonc
-{
-  "font_display": "Anton",              // tall condensed, all-caps titles & numbers
-  "font_display_alt": "Bebas Neue",
-  "font_body": "Montserrat ExtraBold Italic", // pop-up text, captions
-  "font_hand": "Permanent Marker",      // scribbles, annotations
-  "white": "#FFFFFF",
-  "ink": "#111111",                      // strokes, shadows
-  "accent_1": "#FFE600",                 // highlight yellow — numbers, key words
-  "accent_2": "#FF2E2E",                 // red — arrows, circles, warnings
-  "accent_3": "#2EE6A6",                 // optional third — "good" / protein
-  "stroke_px": 10,
-  "shadow": {"x": 6, "y": 8, "blur": 0, "color": "#111111"},
-  "tilt_range_deg": [-6, 6],
-  "texture": "paper"                     // paper grain / tape strips on cards
-}
+## Rendering graphics
+
+```bash
+python helpers/graphics.py --list                                       # templates + every parameter
+python helpers/graphics.py spec.json -o edit/gfx/title.webm             # alpha WebM, full frame
+python helpers/graphics.py spec.json -o check.png --still 0.8 --bg frame.png   # one frame on the real shot
+python helpers/graphics.py edit/gfx/batch.json                          # {"graphics": [{..., "out": "..."}]}
 ```
 
-Fonts: Anton, Bebas Neue, Montserrat and Permanent Marker are all free on Google Fonts (OFL). Download them into `assets/fonts/` on first use. Impact is on the system as a fallback.
+Add `--size 1080x1920` for Shorts. Portrait defaults already keep graphics inside the safe zone. Every render writes `<out>.cues.json` with SFX hits (`pop`, `slam`, `thud`, `tick`, `ding`, `boom`, `marker`). Add each one to the EDL `sfx` at `start_in_output + at`, using the names of your `assets/sfx/` files.
 
-## Motion language
+| Template | Use | Key params |
+|---|---|---|
+| `title` | Chapter title slam, word by word on a panel | `text`, `highlight`, `stagger` |
+| `counter` | Macro / calorie HUD card, counts up, red over target | `label`, `from`, `to`, `target`, `sub` |
+| `stamp` | `DAY 3` / `7:42 AM` thud-in | `text`, `sub` |
+| `popup` | Sarcasm, inner thoughts, contradictions | `text`, `highlight`, `pos` |
+| `arrow` | Marker arrow drawing on + note | `from`, `to`, `bend`, `label` |
+| `circle` | Marker loop around something | `center`, `radius`, `label` |
+| `progress` | Segmented challenge bar | `segments`, `filled`, `start_label`, `end_label` |
+| `reveal` | Result number: dim, count, flash, boom | `to`, `suffix`, `label`, `decimals` |
+| `sticker` | Cut-out with white border (`cutout: true` runs rembg) | `image`, `height` |
 
-- **Entrances slam:** scale 0 → 1.12 → 1.0 over 6–8 frames (ease-out-back, overshoot ~1.6), plus a 2–3 frame shake on landing and a SFX. Text can come in word by word, each word slamming.
-- **Idle:** a subtle wobble (±1° rotation, 2–3s period) or a 1–2% scale "breathe", so the graphic doesn't sit dead.
-- **Exits:** fast. Scale to 0 in 4 frames (ease-in-back) or a hard cut. Never a slow fade.
-- **Numbers count up** with ease-out and a tick SFX, ending in a bounce + "ding". Apply video-use's payoff sync so the final number lands on the spoken word.
-- **Hand-drawn elements draw on:** an arrow or circle path draws in 6–10 frames with marker texture and slight jitter (re-randomise the path every 2–3 frames for a "boiling line" look).
-- **Things are tilted.** Nothing sits at a perfect 0°. Alternate the tilt direction between consecutive graphics.
-- **Easing:** never linear (video-use rule). Use ease-out-back for entrances, ease-in-back for exits, ease-out-cubic for counters.
+Overlay entry: `{"file": "gfx/title.webm", "start_in_output": 12.4, "duration": 1.79}` (the duration is in the cues file).
 
-## Graphic catalog
+**Sync the payoff.** For counters and reveals, set `count_at + count_dur` so the number lands on the spoken word: `start_in_output = word_time - (count_at + count_dur)`.
 
-| Graphic | Spec |
-|---|---|
-| **Macro / calorie HUD** | Persistent corner card (top-left in 16:9, safe-zone in 9:16): `KCAL 1,240 / P 98g · C 140g · F 40g`. The number counts up on each meal. Paper card, tape strip, slight tilt. Turns red when it goes over the target |
-| **Food label card** | Per meal/food: cut-out photo of the food (rembg) + name + kcal in yellow. Slams in beside the food, 2–3s |
-| **Day / time stamp** | `DAY 3` big + `7:42 AM` small, stamped on with a thud, at chapter starts |
-| **Chapter title slam** | Full-width Anton, word by word on the downbeat, over a blurred/darkened freeze of the shot. 1.2–2s |
-| **Rep / set / weight tracker** | `SET 3/5 · 140 KG` plate-shaped badges; the rep count ticks on each rep (time it to the rep in the footage) |
-| **Callout arrow / circle** | Red marker arrow + 1–3 word Permanent Marker note ("HIS FORM 💀"). Points at the subject. Tracks roughly if the subject moves |
-| **Text pop-up** | Montserrat ExtraBold Italic, white with ink stroke, yellow on the key word. For contradictions, inner thoughts, sarcasm |
-| **Sticker** | Cut-out of the host's face/body (rembg) with a thick white border; used for reactions or thumbnail-style moments |
-| **Before / after split** | Two tilted polaroid frames, a stamped date on each, slamming in one after the other |
-| **Result reveal** | Black/blur, then the number counts in huge (60% of frame height), then hits with a flash + the biggest SFX of the video. Hold ≥1.5s |
-| **Progress bar** | Chunky segmented bar (Day 1 ▮▮▮▯▯ Day 5) for multi-day challenges, at chapter transitions |
-| **"Don't try this" disclaimer** | Small, readable, not jokey, 2–3s, for genuinely risky content |
+## Brand captions
 
-**Short-form captions** use this system too: Montserrat ExtraBold Italic or Anton, 1–3 words, white with a 10px ink stroke, the key word in yellow (or slammed bigger), placed centre-low inside the safe zone. They're still applied last (video-use Rule 1).
+Set `"caption_style": "brand"` in the EDL and render with `--build-subtitles`. You get Poppins ExtraBold in uppercase, 2 words per chunk, on one translucent gray box, with the word being spoken in blue and a pop on each new chunk. They sit 30% up in portrait (clear of the Shorts UI) and 10% up in landscape. Tune them under `captions` in `brand.json`. They're always applied last, over every graphic (video-use Rule 1). They need an ffmpeg with libass, which `ffmpeg-full` provides.
 
-## Build engine
+## Motion rules
 
-- **HyperFrames** (HTML/CSS/GSAP), the default for these graphics. CSS gives you real text strokes, shadows, textures and `back.out` easing for free, and renders to transparent WebM (`--format webm`) for overlays.
-- **PIL + PNG sequence** for very simple counters if HyperFrames isn't installed.
-- Bring the same CSS file (`assets/brand.css`, generated from `brand.json`) into every slot so all graphics match.
+- **Entrances pop or slam** (ease-out-back) with a SFX. **Exits are fast** (4 frames). Never use slow fades or linear easing.
+- **One new thing at a time.** Don't land two graphics in the same second.
+- **Alternate tilt direction** between consecutive graphics (`tilt`).
+- **Every number the host says** (kcal, kg, reps, days) gets a graphic.
+- **The reveal is the biggest graphic in the video.** Use it once.
 
-Every slot is its own sub-agent (video-use Rule 10: parallel). Add these to the brief:
-- The `brand.json` values, verbatim, with absolute font file paths
-- The output: **transparent WebM** (VP9 + alpha) at the project resolution/fps, or MP4 if it's full-screen
-- The motion language bullets above, verbatim
-- An anti-list: *"No monospace, no dark-UI panels, no thin lines, no gradients on black, no linear easing, no slow fades, no emojis unless specified, nothing perfectly level."*
-- The exact numbers/text and the payoff timestamp to land on
+## Gaps (build when a video needs them)
+
+Food label cards (sticker + name + kcal), rep/set tracker badges, before/after polaroid split, and the "don't try this" disclaimer. Add each as a new `tpl_*` in `graphics.py`, using the same `panel`, `text_sprite` and `pop_env` helpers so it matches the rest.
 
 ## Brand-consistency check
 
-Before the final render, extract one frame from each graphic and tile them in a contact sheet (`ffmpeg ... tile=4x3`). Do they look like one channel made them (same fonts, stroke, shadow, palette)? Fix any outliers.
+Before the final render, run `--still` on every graphic with `--bg` set to a frame of its shot, then tile the results (`ffmpeg ... tile=3x3`). Check that they look like one channel made them and that nothing collides with the captions or the Shorts UI.

@@ -11,12 +11,18 @@ In this genre, sound does about half the comedy. Music sets the emotion of each 
 
 **Never use commercially released songs** (charts, artists, film scores). They get Content ID claims: lost revenue, muted audio, or blocked videos. Only use:
 
-- The user's subscription library (Epidemic Sound, Artlist, Musicbed, Soundstripe…), with the channel whitelisted
-- YouTube Audio Library (check each track's attribution requirement)
-- Royalty-free or CC0 tracks with the license recorded
-- AI-generated music from a service whose terms grant commercial use (record which one)
+- **This channel's library: [Free To Use](https://freetouse.com/music).** It's free, and monetized YouTube is allowed **with attribution**. The user downloads tracks from the site (Claude doesn't scrape it) into `<videos_dir>/assets/music/` and tells you the title and artist.
+- Anything else must have a licence the user can name. Put the exact required credit in the entry's `credit` field.
 
-Ask the user which library they use at intake. Log every track and SFX in `edit/audio/credits.md` with its license.
+**Free To Use attribution:** tag every music entry with `"source": "freetouse", "title": "…", "artist": "…"`. Every render writes `edit/description_credits.txt`:
+
+```
+Music from Free To Use
+Source: https://freetouse.com/music
+<Title> by <Artist>
+```
+
+Paste it into the YouTube description **before** the video goes public or unlisted. Free To Use registers its catalogue in Content ID, so a missing credit means a claim. If a claim still arrives, email copyright@freetouse.com with the video link (usually cleared within 24h). A paid Free To Use plan whitelists the channel and removes the attribution requirement. Render warns about any music entry without attribution; don't ship with that warning.
 
 ## Music map
 
@@ -50,13 +56,19 @@ Snap **hype montages, transitions and graphic slams** to beats. Don't snap dialo
 
 ## SFX kit
 
-Store it in `<videos_dir>/assets/sfx/` (reused across videos) with `sfx.json` tags. Core set:
+**Starter kit (built in):** `video-use/assets/sfx/`, synthesized by `helpers/make_sfx.py`. The channel owns it outright: no licence, no attribution, no claims. Use the bare name in `sfx` entries:
 
-- **Movement:** whoosh (short/long), swish, riser, reverse-cymbal
-- **Impact:** boom/sub drop, punch, "vine-boom-style" bass hit, glass/metal clank (plates!)
-- **Comedy:** record scratch, cartoon boing, slide whistle, crickets, sad trombone, bonk, bleep
-- **UI/graphics:** pop, click, ding/cash register (calorie counters), typewriter tick, swoosh-in for text
-- **Gym:** plate clang, chalk clap, grunt (filmed by the host, the funniest option)
+| Name | Use |
+|---|---|
+| `whoosh`, `swish`, `whoosh_long` | transitions, whips, text swoosh-ins |
+| `riser` | 1.6s build into a drop, reveal or hype cut (end it on the hit) |
+| `boom`, `slam`, `thud` | reveals and crash zooms / title slams and smash cuts / stamps and landings |
+| `pop`, `click` | graphic and sticker entrances / UI |
+| `tick`, `ding` | number count-up (0.9s roll) / counter landing, PRs |
+| `marker` | arrows and circles drawing on |
+| `record_scratch`, `boing`, `bleep` | freeze-frames and music stops / fails / censoring |
+
+`graphics.py` cue names map 1:1 to these. A file with the same name in `<videos_dir>/assets/sfx/` overrides the kit for that project. Add real recordings there as the channel grows: plate clangs, chalk claps and the host's own grunts are funnier than anything synthetic.
 
 Rules: every graphic entrance gets a soft SFX, every gag gets at most **one** featured SFX, and SFX peaks sit at about −6 to −10 dB under dialogue peaks, never louder than the voice. Vary the samples; the same whoosh 20 times sounds cheap.
 

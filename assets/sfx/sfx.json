@@ -1,0 +1,78 @@
+{
+  "_license": "Synthesized by helpers/make_sfx.py. Owned outright; no attribution needed.",
+  "whoosh": {
+    "file": "whoosh.wav",
+    "duration": 0.55,
+    "use": "Medium whoosh, L\u2192R. Transitions, whips, fast moves."
+  },
+  "swish": {
+    "file": "swish.wav",
+    "duration": 0.24,
+    "use": "Short bright swish. Text/graphic swoosh-ins, quick whips."
+  },
+  "whoosh_long": {
+    "file": "whoosh_long.wav",
+    "duration": 1.05,
+    "use": "Long, dark whoosh. Chapter transitions, slow pushes."
+  },
+  "riser": {
+    "file": "riser.wav",
+    "duration": 1.6,
+    "use": "1.6s build. Into drops, reveals, hype cuts; end it on the hit."
+  },
+  "boom": {
+    "file": "boom.wav",
+    "duration": 2.4,
+    "use": "Deep sub hit with tail. Reveals, crash zooms, big punchlines."
+  },
+  "slam": {
+    "file": "slam.wav",
+    "duration": 0.9,
+    "use": "Punchy impact. Title word slams, plate drops, smash cuts."
+  },
+  "thud": {
+    "file": "thud.wav",
+    "duration": 0.45,
+    "use": "Soft low thud. Stamps, landings, small impacts."
+  },
+  "pop": {
+    "file": "pop.wav",
+    "duration": 0.13,
+    "use": "Bubble pop. Graphic/sticker entrances."
+  },
+  "click": {
+    "file": "click.wav",
+    "duration": 0.05,
+    "use": "Single UI click."
+  },
+  "tick": {
+    "file": "tick.wav",
+    "duration": 0.9,
+    "use": "0.9s rising tick-roll. Number count-ups."
+  },
+  "ding": {
+    "file": "ding.wav",
+    "duration": 3.1,
+    "use": "Bright bell. Counter landings, correct answers, PRs."
+  },
+  "marker": {
+    "file": "marker.wav",
+    "duration": 0.32,
+    "use": "Felt-marker scribble. Arrows and circles drawing on."
+  },
+  "record_scratch": {
+    "file": "record_scratch.wav",
+    "duration": 0.62,
+    "use": "Vinyl scratch. Freeze-frames, 'wait what' moments, music stops."
+  },
+  "bleep": {
+    "file": "bleep.wav",
+    "duration": 0.6,
+    "use": "1 kHz censor bleep."
+  },
+  "boing": {
+    "file": "boing.wav",
+    "duration": 0.75,
+    "use": "Cartoon boing. Fails, bounces, silly moments."
+  }
+}

@@ -42,6 +42,7 @@ from pathlib import Path
 
 import audio_mix
 import fx as fxmod
+import graphics
 import transitions
 
 try:
@@ -381,18 +382,18 @@ def _words_in_range(transcript: dict, t_start: float, t_end: float) -> list[dict
     return out
 
 
-def build_master_srt(edl: dict, edit_dir: Path, out_path: Path, offsets: list[float]) -> None:
-    """Build an output-timeline SRT from per-source transcripts.
+def caption_chunks(edl: dict, edit_dir: Path, offsets: list[float],
+                   max_words: int = 2) -> list[list[tuple[str, float, float]]]:
+    """Group transcript words into caption chunks on the OUTPUT timeline.
 
-    - 2-word chunks (break on any punctuation in between)
-    - UPPERCASE text
-    - Output times computed as fx_map(word.start - segment_start) + segment_offset,
-      where `offsets` holds each range's start on the output timeline
-      (transition overlaps included) and fx_map accounts for freeze/speed
+    Each chunk is a list of (word, out_start, out_end). Chunks break after
+    `max_words` words or on punctuation. Output times are
+    fx_map(word.start - segment_start) + segment_offset, where `offsets` holds
+    each range's start on the output timeline (transition overlaps included)
+    and fx_map accounts for freeze/speed. Sped-up ranges get no captions.
     """
     transcripts_dir = edit_dir / "transcripts"
-
-    entries: list[tuple[float, float, str]] = []
+    chunks_out: list[list[tuple[str, float, float]]] = []
 
     for r, seg_offset in zip(edl["ranges"], offsets):
         src_name = r["source"]
@@ -408,48 +409,120 @@ def build_master_srt(edl: dict, edit_dir: Path, out_path: Path, offsets: list[fl
             continue
 
         transcript = json.loads(tr_path.read_text())
-        words_in_seg = _words_in_range(transcript, seg_start, seg_end)
-
-        # Group into 2-word chunks, break on punctuation
-        chunks: list[list[dict]] = []
-        current: list[dict] = []
-        for w in words_in_seg:
+        chunk: list[tuple[str, float, float]] = []
+        for w in _words_in_range(transcript, seg_start, seg_end):
             text = (w.get("text") or "").strip()
             if not text:
                 continue
-            current.append(w)
-            # Break if the current text ends in punctuation or we hit 2 words
-            ends_in_punct = bool(text) and text[-1] in PUNCT_BREAK
-            if len(current) >= 2 or ends_in_punct:
-                chunks.append(current)
-                current = []
-        if current:
-            chunks.append(current)
+            ws = max(seg_start, w.get("start", seg_start))
+            we = min(seg_end, w.get("end", seg_end))
+            out_s = fxmod.map_time(fx, max(0.0, ws - seg_start)) + seg_offset
+            out_e = fxmod.map_time(fx, max(0.0, we - seg_start)) + seg_offset
+            chunk.append((text, out_s, max(out_e, out_s + 0.05)))
+            if len(chunk) >= max_words or text[-1] in PUNCT_BREAK:
+                chunks_out.append(chunk)
+                chunk = []
+        if chunk:
+            chunks_out.append(chunk)
 
-        for chunk in chunks:
-            local_start = max(seg_start, chunk[0].get("start", seg_start))
-            local_end = min(seg_end, chunk[-1].get("end", seg_end))
-            out_start = fxmod.map_time(fx, max(0.0, local_start - seg_start)) + seg_offset
-            out_end = fxmod.map_time(fx, max(0.0, local_end - seg_start)) + seg_offset
-            if out_end <= out_start:
-                out_end = out_start + 0.4
-            text = " ".join((w.get("text") or "").strip() for w in chunk)
-            text = re.sub(r"\s+", " ", text).strip()
-            # Strip trailing punctuation for cleaner uppercase look
-            text = text.rstrip(",;:")
-            text = text.upper()
-            entries.append((out_start, out_end, text))
+    chunks_out.sort(key=lambda c: c[0][1])
+    return chunks_out
 
-    # Sort and write as SRT
-    entries.sort(key=lambda e: e[0])
+
+def _caption_text(words: list[str]) -> str:
+    # Strip trailing punctuation for a cleaner uppercase look
+    return re.sub(r"\s+", " ", " ".join(words)).strip().rstrip(",;:").upper()
+
+
+def build_master_srt(edl: dict, edit_dir: Path, out_path: Path, offsets: list[float]) -> None:
+    """Output-timeline SRT: 2-word UPPERCASE chunks (see caption_chunks)."""
     lines: list[str] = []
-    for i, (a, b, t) in enumerate(entries, start=1):
-        lines.append(str(i))
-        lines.append(f"{_srt_timestamp(a)} --> {_srt_timestamp(b)}")
-        lines.append(t)
-        lines.append("")
+    chunks = caption_chunks(edl, edit_dir, offsets)
+    for i, chunk in enumerate(chunks, start=1):
+        a, b = chunk[0][1], chunk[-1][2]
+        if b <= a:
+            b = a + 0.4
+        lines += [str(i), f"{_srt_timestamp(a)} --> {_srt_timestamp(b)}",
+                  _caption_text([w for w, _, _ in chunk]), ""]
     out_path.write_text("\n".join(lines))
-    print(f"master SRT → {out_path.name} ({len(entries)} cues)")
+    print(f"master SRT → {out_path.name} ({len(chunks)} cues)")
+
+
+def _ass_time(t: float) -> str:
+    cs = int(round(max(0.0, t) * 100))
+    h, rem = divmod(cs, 360000)
+    m, rem = divmod(rem, 6000)
+    s, cs = divmod(rem, 100)
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+def _ass_color(rgba: tuple[int, int, int, int], alpha: float = 1.0) -> str:
+    r, g, b, _ = rgba
+    return f"&H{int(round(255 * (1 - alpha))):02X}{b:02X}{g:02X}{r:02X}"
+
+
+def build_master_ass(edl: dict, edit_dir: Path, out_path: Path, offsets: list[float],
+                     canvas: tuple[int, int], brand: dict) -> Path:
+    """Brand captions as ASS (rendered by libass): uppercase chunks on a translucent
+    panel box, the word being spoken in the accent colour, a pop on each new chunk.
+    Returns the fonts directory the subtitles filter needs."""
+    from PIL import ImageFont
+
+    cap = brand["captions"]
+    w, h = canvas
+    u = min(w, h)
+    colors = {k: graphics.hex_rgba(v) for k, v in brand["colors"].items()}
+    font_path = Path(brand["_font_paths"][cap.get("font", "body")])
+    family = " ".join(ImageFont.truetype(str(font_path), 20).getname())  # e.g. "Poppins ExtraBold"
+    margin_v = cap["margin_v_portrait"] if h > w else cap["margin_v_landscape"]
+    panel_alpha = brand.get("panel_alpha", 0.62)
+    box = cap.get("box", True)
+    base = colors[cap.get("color", "white")]
+    active = _ass_color(colors[cap.get("active_color", "accent_1")]).replace("&H00", "&H")
+
+    style = ",".join(str(v) for v in [
+        "Brand", family, round(cap["size"] * u),
+        _ass_color(base), _ass_color(base),
+        _ass_color(colors["ink"], 0.0) if box else _ass_color(colors["ink"]),   # outline (hidden with box)
+        _ass_color(colors["panel"], panel_alpha) if box else _ass_color(colors["ink"]),
+        0, 0, 0, 0, 100, 100, 0, 0,
+        4 if box else 1,  # BorderStyle 4 (libass): one box per line in BackColour, not one per colour run
+        round(0.014 * u) if box else round(brand["stroke"] * u),  # box padding / outline
+        0, 2, round(0.05 * w), round(0.05 * w), round(margin_v * h), 1,
+    ])
+    header = [
+        "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {w}", f"PlayResY: {h}",
+        "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
+        "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
+        "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+        f"Style: {style}", "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    pop = r"{\fscx78\fscy78\t(0,70,\fscx106\fscy106)\t(70,130,\fscx100\fscy100)}"
+    events = []
+    chunks = caption_chunks(edl, edit_dir, offsets, max_words=int(cap.get("max_words", 2)))
+    for ci, chunk in enumerate(chunks):
+        words = [_caption_text([wd]) if cap.get("case", "upper") == "upper" else wd
+                 for wd, _, _ in chunk]
+        words = [wd.replace("{", "(").replace("}", ")") for wd in words]
+        chunk_end = chunk[-1][2]
+        if ci + 1 < len(chunks):
+            chunk_end = min(chunk_end + 0.25, chunks[ci + 1][0][1])  # hold briefly, never overlap
+        for wi, (_, ws, _) in enumerate(chunk):
+            start = chunk[0][1] if wi == 0 else ws
+            end = chunk[wi + 1][1] if wi + 1 < len(chunk) else chunk_end
+            if end <= start:
+                continue
+            text = " ".join(f"{{\\c{active}&}}{wd}{{\\r}}" if j == wi else wd
+                            for j, wd in enumerate(words))
+            events.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Brand,,0,0,0,,"
+                          f"{pop if wi == 0 else ''}{text}")
+    out_path.write_text("\n".join(header + events) + "\n")
+    print(f"brand captions → {out_path.name} ({len(chunks)} chunks, {family})")
+    return font_path.parent
 
 
 # -------- Loudness normalization (social-ready audio) -----------------------
@@ -595,6 +668,7 @@ def build_final_composite(
     subtitles_path: Path | None,
     out_path: Path,
     edit_dir: Path,
+    fonts_dir: Path | None = None,
 ) -> None:
     """Final pass: base → overlays (PTS-shifted) → subtitles LAST → out.
 
@@ -638,9 +712,14 @@ def build_final_composite(
     # Subtitles LAST — Rule 1
     if has_subs:
         subs_abs = str(subtitles_path.resolve()).replace(":", r"\:").replace("'", r"\'")
-        filter_parts.append(
-            f"{current}subtitles='{subs_abs}':force_style='{SUB_FORCE_STYLE}'[outv]"
-        )
+        if subtitles_path.suffix.lower() == ".ass":
+            # Styled ASS carries its own styles; fontsdir lets libass find the brand fonts.
+            fonts = str((fonts_dir or graphics.FONTS_DIR).resolve()).replace(":", r"\:").replace("'", r"\'")
+            filter_parts.append(f"{current}subtitles='{subs_abs}':fontsdir='{fonts}'[outv]")
+        else:
+            filter_parts.append(
+                f"{current}subtitles='{subs_abs}':force_style='{SUB_FORCE_STYLE}'[outv]"
+            )
         out_label = "[outv]"
     else:
         # Rename the last overlay output to [outv] for consistency
@@ -767,6 +846,7 @@ def main() -> None:
         mixed_path = base_path.with_name(base_path.stem + "_mixed.mp4")
         audio_mix.mix_audio(base_path, mixed_path, music, sfx, patches, edit_dir)
         base_path = mixed_path
+        audio_mix.write_music_credits(music, edit_dir)
 
     print("output timeline (range start → output time):")
     for i, (r, off) in enumerate(zip(ranges, offsets)):
@@ -774,8 +854,14 @@ def main() -> None:
 
     # 3. Subtitles: build if requested, resolve final path
     subs_path: Path | None = None
+    fonts_dir: Path | None = None
     if not args.no_subtitles:
-        if args.build_subtitles:
+        if args.build_subtitles and edl.get("caption_style") == "brand":
+            subs_path = edit_dir / "master.ass"
+            brand = graphics.load_brand(graphics.find_brand(edl_path))
+            fonts_dir = build_master_ass(edl, edit_dir, subs_path, offsets,
+                                         probe_display_size(base_path), brand)
+        elif args.build_subtitles:
             subs_path = edit_dir / "master.srt"
             build_master_srt(edl, edit_dir, subs_path, offsets)
         elif edl.get("subtitles"):
@@ -788,11 +874,11 @@ def main() -> None:
     overlays = edl.get("overlays") or []
     if args.no_loudnorm:
         # Composite directly to final output
-        build_final_composite(base_path, overlays, subs_path, out_path, edit_dir)
+        build_final_composite(base_path, overlays, subs_path, out_path, edit_dir, fonts_dir)
     else:
         # Composite to a temp file, then run loudnorm → final output
         tmp_composite = out_path.with_suffix(".prenorm.mp4")
-        build_final_composite(base_path, overlays, subs_path, tmp_composite, edit_dir)
+        build_final_composite(base_path, overlays, subs_path, tmp_composite, edit_dir, fonts_dir)
         print("loudness normalization → social-ready (-14 LUFS / -1 dBTP / LRA 11)")
         apply_loudnorm_two_pass(tmp_composite, out_path, preview=args.draft)
         tmp_composite.unlink(missing_ok=True)
